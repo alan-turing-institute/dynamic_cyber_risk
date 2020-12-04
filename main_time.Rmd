@@ -1,104 +1,272 @@
 ---
-title: "main_time"
+title: "Breach inter-arrival times"
 output: html_notebook
 ---
 
-The notebook reproduces the predictions of inter-arrival times
+The notebook reproduces the predictions of QAR and CQAR
 
 ```{r}
-setwd("/Users/temp/Documents/QAR")
-source("main_functions.R")
+library("ggplot2")
+library("reshape2")
+
 source("additional_functions.R")
-df = read.csv("hacking_breaches.csv", header = T) 
-ts_total = df$log_time
-n_train = sum(df$flag_train)
-n_test = length(ts_total) - n_train
-ts_train = ts_total[1:n_train]
-ts_test = ts_total[(n_train+1):length(ts_total)]
+source("main_functions.R")
+
+df <- read.csv("hacking_breaches.csv", header = T)
+ts_total <- df$log_time
+n_train <- sum(df$flag_train)
+n_test <- length(ts_total) - n_train
+ts_train <- ts_total[1:n_train]
+ts_test <- ts_total[(n_train + 1):length(ts_total)]
 acf <- acf(ts_total, plot = FALSE)
-pacf <- pacf(ts_total, plot = FALSE) 
+pacf <- pacf(ts_total, plot = FALSE)
 ```
 
 ```{r}
-plot(as.Date(df$Date.Made.Public, "%m/%d/%Y"), df$time, type = "l", lwd = 1.4, cex.main = 1.4, cex.lab = 1.3, cex.axis = 1.3, xlab = "time", ylab = "", main = "inter-arrival times")
+ggplot(df, aes(x = seq_along(time), y = time)) +
+  geom_line() +
+  labs(title = "inter-arrival times", x = "time", y = "") +
+  theme(
+    axis.text.x = element_text(size = 14),
+    axis.title.x = element_text(size = 15),
+    axis.text.y = element_text(size = 14),
+    axis.title.y = element_text(size = 15),
+    plot.title = element_text(
+      size = 20,
+      face = "bold",
+      color = "black",
+      hjust = 0.5
+    )
+  )
 ```
 
 ```{r}
-plot(acf, lwd = 1.4, cex.main = 1.4, cex.lab = 1.3, cex.axis = 1.3, xlab = "lag", ylab = "ACF",  main = "")
+plot(
+  acf,
+  lwd = 1.4,
+  cex.main = 1.4,
+  cex.lab = 1.3,
+  cex.axis = 1.3,
+  xlab = "lag",
+  ylab = "ACF",
+  main = ""
+)
 ```
 
 
 ```{r}
-plot(pacf, lwd = 1.4, cex.main = 1.4, cex.lab = 1.3, cex.axis = 1.3, xlab = "lag", ylab = "PACF", main = "")
-```
-```{r}
-quantile_list = c(0.9, 0.92, 0.95)
-bic = calculate_bic(ts_train, max_lag = 30, quantile_list)
-lag_optimal = apply(bic, 2, which.min)
+plot(
+  pacf,
+  lwd = 1.4,
+  cex.main = 1.4,
+  cex.lab = 1.3,
+  cex.axis = 1.3,
+  xlab = "lag",
+  ylab = "PACF",
+  main = ""
+)
 ```
 
 ```{r}
-par(mfrow=c(3, 1))
-for (i in 1:length(quantile_list)) {
-  plot(bic[, i], type = "l", lwd = 1.4, cex.main = 1.4, cex.lab = 1.3, cex.axis = 1.3, xlab = "lag", ylab = "BIC", main = paste("quantile", quantile_list[i], sep = " = "))
-  lines(which.min(bic[, i]), bic[which.min(bic[, i]), i], type = "p", lwd = 2, col = "red")
+quantile_list <- c(0.9, 0.92, 0.95)
+bic <- calculate_bic(ts_train, max_lag = 30, 0.5)
+lag_optimal <- apply(bic, 2, which.min)
+qplot(seq_along(bic), bic) + geom_line(size = 1.5) +
+  geom_point() +
+  annotate(
+    "point",
+    x = lag_optimal,
+    y = bic[lag_optimal],
+    colour = "red",
+    size = 5
+  ) +
+  labs(
+    title = "log inter-arrival times",
+    x = "lag",
+    y = "BIC",
+    color = ""
+  ) +
+  theme(
+    axis.text.x = element_text(size = 14),
+    axis.title.x = element_text(size = 15),
+    axis.text.y = element_text(size = 14),
+    axis.title.y = element_text(size = 15),
+    plot.title = element_text(
+      size = 20,
+      face = "bold",
+      color = "black",
+      hjust = 0.5
+    )
+  )
+```
+
+
+```{r}
+qar_test <- matrix(NaN, n_test, length(quantile_list))
+cqar_test <- matrix(NaN, n_test, length(quantile_list))
+losses_test <- matrix(NaN, n_test, 2 * length(quantile_list))
+vartest_matrix <-
+  data.frame(matrix(0, 2 * length(quantile_list), 7))
+names(vartest_matrix) <- c(
+  "quantile",
+  "expected.exceed",
+  "actual.exceed",
+  "uc.LRp",
+  "cc.LRp",
+  "uc.Decision",
+  "cc.Decision"
+)
+for (i in seq_along(quantile_list)) {
+  quantile <- quantile_list[i]
+  qar_test[(lag_optimal + 1):n_test, i] <-
+    qar(ts_train, ts_test, lag_optimal, quantile)
+  cqar_test[(lag_optimal + 1):n_test, i] <- cqar(
+    ts_test,
+    lag_optimal,
+    quantile,
+    iter_number = 2500,
+    burn_in_period = 500,
+    reg_param = 1,
+    sigma_param = 0.7,
+    seed = 1
+  )$target_hat
+  vartest_matrix[i, ] <-
+    backtesting(1 - quantile, -ts_test[(lag_optimal + 1):n_test], -qar_test[(lag_optimal + 1):n_test, i])
+  vartest_matrix[i + 3, ] <-
+    backtesting(1 - quantile, -ts_test[(lag_optimal + 1):n_test], -cqar_test[(lag_optimal + 1):n_test, i])
+  losses_test[(lag_optimal + 1):n_test, i] <-
+    pinball_loss(ts_test[(lag_optimal + 1):n_test], qar_test[(lag_optimal + 1):n_test, i], quantile)
+  losses_test[(lag_optimal + 1):n_test, i + 3] <-
+    pinball_loss(ts_test[(lag_optimal + 1):n_test], cqar_test[(lag_optimal + 1):n_test, i], quantile)
+}
+vartest_matrix["quantile"] <- rep(quantile_list, 2)
+vartest_matrix$model <-
+  vartest_matrix$model <- c(rep("QAR", 3), rep("CQAR", 3))
+cumlosses_test <- apply(na.omit(losses_test), 2, cumsum)
+regret_average <-
+  matrix(0, dim(cumlosses_test)[1], length(quantile_list))
+for (i in seq_along(quantile_list)) {
+  regret_average[, i] <-
+    (cumlosses_test[, i] - cumlosses_test[, i + 3]) / seq(1, dim(cumlosses_test)[1])
 }
 ```
 
-
 ```{r}
-qar_test = matrix(NaN, n_test, length(quantile_list))
-waaqar_test = matrix(NaN, n_test, length(quantile_list))
-losses_test = matrix(NaN, n_test, 2*length(quantile_list))
-VaRtest_matrix = data.frame(matrix(0, 2*length(quantile_list), 7))
-names(VaRtest_matrix) = c("quantile", "expected.exceed", "actual.exceed", "uc.LRp", "cc.LRp", "uc.Decision", "cc.Decision")
-for (i in 1:length(quantile_list)) {
-  lag = lag_optimal[i]
-  quantile = quantile_list[i]
-  qar_test[(lag + 1):n_test, i] = qar(ts_train, ts_test, lag, quantile)
-  waaqar_test[(lag + 1):n_test, i] = waaqar(ts_test, lag, quantile, iter_number = 2500, burn_in_period = 500, reg_param = 1, sigma_param = 0.7, seed = 1)$target_hat
-  VaRtest_matrix[i, ] = backtesting(quantile, ts_test[(lag + 1):n_test], qar_test[(lag + 1):n_test, i])
-  VaRtest_matrix[i+3, ] = backtesting(quantile, ts_test[(lag + 1):n_test], waaqar_test[(lag + 1):n_test, i])
-  losses_test[(lag + 1):n_test, i] = pinball_loss(ts_test[(lag + 1):n_test], qar_test[(lag + 1):n_test, i], quantile)
-  losses_test[(lag + 1):n_test, i+3] = pinball_loss(ts_test[(lag + 1):n_test], waaqar_test[(lag + 1):n_test, i], quantile)
-}
-VaRtest_matrix$model= VaRtest_matrix$model = c(rep("QAR", 3), rep("WAAQAR", 3))
-cumlosses_test = apply(na.omit(losses_test), 2, cumsum)
-regret_average = matrix(0, dim(cumlosses_test)[1], length(quantile_list))
-for (i in 1:length(quantile_list)) {
-  regret_average[, i] = (cumlosses_test[, i] - cumlosses_test[,i+3 ]) / seq(1, dim(cumlosses_test)[1])
-}
+print(vartest_matrix[, c(ncol(vartest_matrix), seq(1, ncol(vartest_matrix) -
+  1))])
 ```
 
 ```{r}
-print(VaRtest_matrix)
+range <- seq((lag_optimal + 1), n_test)
+qar_preds <- data.frame(ts_test[range], qar_test[range, ])
+colnames(qar_preds) <- c("actual", "quantile = 0.9", "quantile = 0.92", "quantile = 0.95")
+qar_preds$time <- seq(1, nrow(qar_preds))
+qar_long <-
+  melt(qar_preds, id = "time") 
+ggplot(data = qar_long, aes(x = time, y = value, colour = variable)) +
+  geom_line(size = 0.5) +
+  scale_color_manual(
+    labels = c(
+      "actual",
+      expression(paste(alpha, " = ", "0.90")),
+      expression(paste(alpha, " = ", 0.92)),
+      expression(paste(alpha, " = ", 0.95))
+    ),
+    values = c("black", "blue", "green", "red")
+  ) +
+  labs(
+    title = "QAR",
+    x = "time",
+    y = "log inter-arrival times",
+    color = ""
+  ) +
+  theme(
+    axis.text.x = element_text(size = 14),
+    axis.title.x = element_text(size = 15),
+    axis.text.y = element_text(size = 14),
+    axis.title.y = element_text(size = 15),
+    plot.title = element_text(
+      size = 20,
+      face = "bold",
+      color = "black",
+      hjust = 0.5
+    ),
+    legend.text = element_text(color = "black", size = 15)
+  )
+```
+
+
+```{r}
+range <- seq((lag_optimal + 1), n_test)
+cqar_preds <- data.frame(ts_test[range], cqar_test[range, ])
+colnames(cqar_preds) <- c("actual", "quantile = 0.9", "quantile = 0.92", "quantile = 0.95")
+cqar_preds$time <- seq(1, nrow(cqar_preds))
+cqar_long <-
+  melt(cqar_preds, id = "time")
+ggplot(data = cqar_long, aes(x = time, y = value, colour = variable)) +
+  geom_line(size = 0.5) +
+  scale_color_manual(
+    labels = c(
+      "actual",
+      expression(paste(alpha, " = ", "0.90")),
+      expression(paste(alpha, " = ", 0.92)),
+      expression(paste(alpha, " = ", 0.95))
+    ),
+    values = c("black", "blue", "green", "red")
+  ) +
+  labs(
+    title = "CQAR",
+    x = "time",
+    y = "log inter-arrival times",
+    color = ""
+  ) +
+  theme(
+    axis.text.x = element_text(size = 14),
+    axis.title.x = element_text(size = 15),
+    axis.text.y = element_text(size = 14),
+    axis.title.y = element_text(size = 15),
+    plot.title = element_text(
+      size = 20,
+      face = "bold",
+      color = "black",
+      hjust = 0.5
+    ),
+    legend.text = element_text(color = "black", size = 15)
+  )
 ```
 
 ```{r}
-range = seq((max(lag_optimal) + 1), n_test)
-par(mfrow = c(1, 1))
-plot(ts_test[range], type = "l", col = "black", xlab = "time", ylab = "log inter-arrival times", main = "QAR", lwd = 1.4, cex.main = 1.4, cex.lab = 1.3, cex.axis = 1.3)
-lines(qar_test[range, 1], col = "blue",  lwd = 1.4, cex.main = 1.4, cex.lab = 1.3, cex.axis = 1.3)
-lines(qar_test[range, 2], col = "green",  lwd = 1.4, cex.main = 1.4, cex.lab = 1.3, cex.axis = 1.3)
-lines(qar_test[range, 3], col = "red",  lwd = 1.4, cex.main = 1.4, cex.lab = 1.3, cex.axis = 1.3)
-legend("bottomleft", legend = c("actual", "0.90", "0.92", "0.95"), col=c("black", "blue", "green", "red"), lty=1, cex=0.55,  lwd = 1.4)
-```
-
-
-```{r}
-range = seq((max(lag_optimal) + 1), n_test)
-par(mfrow = c(1, 1))
-plot(ts_test[range], type = "l", col = "black", xlab = "time", ylab = "log inter-arrival times", main = "WAAQAR", lwd = 1.4, cex.main = 1.4, cex.lab = 1.3, cex.axis = 1.3)
-lines(waaqar_test[range, 1], col = "blue",  lwd = 1.4, cex.main = 1.4, cex.lab = 1.3, cex.axis = 1.3)
-lines(waaqar_test[range, 2], col = "green",  lwd = 1.4, cex.main = 1.4, cex.lab = 1.3, cex.axis = 1.3)
-lines(waaqar_test[range, 3], col = "red",  lwd = 1.4, cex.main = 1.4, cex.lab = 1.3, cex.axis = 1.3)
-legend("bottomleft", legend = c("actual", "0.90", "0.92", "0.95"), col=c("black", "blue", "green", "red"), lty=1, cex=0.55,  lwd = 1.4)
-```
-
-```{r}
-par(mfrow = c(1, 1))
-plot(regret_average[, 1], type = "l",  col = "blue", xlab = "time", ylab = "average regret", lwd = 1.4, cex.main = 1.4, cex.lab = 1.3, cex.axis = 1.3)
-lines(regret_average[, 2], col = "green", lwd = 1.4, cex.main = 1.4, cex.lab = 1.3, cex.axis = 1.3)
-lines(regret_average[, 3], col = "red", lwd = 1.4, cex.main = 1.4, cex.lab = 1.3, cex.axis = 1.3)
-legend("topright", inset=c(-0.007,0), legend = c("0.90", "0.92", "0.95"), col=c("blue", "green", "red"),lty=1, cex=1.3,  lwd = 1.4)
+regret_average <- data.frame(regret_average)
+regret_average$time <- seq(1, nrow(regret_average))
+regret_long <-
+  melt(regret_average, id = "time")
+ggplot(data = regret_long, aes(x = time, y = value, colour = variable)) +
+  geom_line(size = 1) +
+  scale_color_manual(
+    labels = c(
+      expression(paste(alpha, " = ", "0.90")),
+      expression(paste(alpha, " = ", 0.92)),
+      expression(paste(alpha, " = ", 0.95))
+    ),
+    values = c("blue", "green", "red")
+  ) +
+  labs(
+    title = "",
+    x = "time",
+    y = "average regret",
+    color = ""
+  ) +
+  theme(
+    axis.text.x = element_text(size = 14),
+    axis.title.x = element_text(size = 15),
+    axis.text.y = element_text(size = 14),
+    axis.title.y = element_text(size = 15),
+    plot.title = element_text(
+      size = 20,
+      face = "bold",
+      color = "black",
+      hjust = 0.5
+    ),
+    legend.text = element_text(color = "black", size = 15)
+  )
 ```

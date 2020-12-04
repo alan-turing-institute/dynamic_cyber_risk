@@ -1,1 +1,9 @@
-install.packages(c("dplyr", "quantreg", "ramify", "rugarch", "tsutils"))
+install.packages(c(
+  "dplyr",
+  "ggplot2",
+  "quantreg",
+  "ramify",
+  "reshape2",
+  "rugarch",
+  "tsutils"
+))

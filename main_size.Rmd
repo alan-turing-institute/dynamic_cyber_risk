@@ -1,85 +1,165 @@
 ---
-title: "main_size"
+title: "Breach sizes"
 output: html_notebook
 ---
 
-The notebook reproduces the predictions of breach sizes 
+The notebook reproduces the predictions of QAR
 
 ```{r}
-setwd("/Users/temp/Documents/QAR")
-source("main_functions.R")
+library("ggplot2")
+library("reshape2")
+
 source("additional_functions.R")
+source("main_functions.R")
 
-df = read.csv("hacking_breaches.csv", header = T) 
-ts_total = df$log_size
-n_train = sum(df$flag_train)
-n_test = length(ts_total) - n_train
-ts_train = ts_total[1:n_train]
-ts_test = ts_total[(n_train+1):length(ts_total)]
-
+df <- read.csv("hacking_breaches.csv", header = T)
+ts_total <- df$log_size
+n_train <- sum(df$flag_train)
+n_test <- length(ts_total) - n_train
+ts_train <- ts_total[1:n_train]
+ts_test <- ts_total[(n_train + 1):length(ts_total)]
 acf <- acf(ts_total, plot = FALSE)
-pacf <- pacf(ts_total, plot = FALSE) 
+pacf <- pacf(ts_total, plot = FALSE)
 ```
 
 ```{r}
-plot(as.Date(df$Date.Made.Public, "%m/%d/%Y"), df$log_size, type = "l", lwd = 1.4, cex.main = 1.4, cex.lab = 1.3, cex.axis = 1.3, xlab = "time", ylab = "", main = "log breach sizes")
+ggplot(df, aes(x = seq_along(log_size), y = log_size)) +
+  geom_line() +
+  labs(title = "log breach sizes", x = "time", y = "") +
+  theme(
+    axis.text.x = element_text(size = 14),
+    axis.title.x = element_text(size = 15),
+    axis.text.y = element_text(size = 14),
+    axis.title.y = element_text(size = 15),
+    plot.title = element_text(
+      size = 20,
+      face = "bold",
+      color = "black",
+      hjust = 0.5
+    )
+  )
 ```
 
 
 ```{r}
-plot(acf, main = "", lwd = 1.4, cex.main = 1, cex.lab = 1.3, cex.axis = 1.3, xlab = "lag", ylab = "ACF")
+plot(
+  acf,
+  main = "",
+  lwd = 1.4,
+  cex.main = 1,
+  cex.lab = 1.3,
+  cex.axis = 1.3,
+  xlab = "lag",
+  ylab = "ACF"
+)
 ```
 ```{r}
-plot(pacf, lwd = 1.4, cex.main = 1.4, cex.lab = 1.3, cex.axis = 1.3, xlab = "lag", ylab = "PACF", main = "")
+plot(
+  pacf,
+  lwd = 1.4,
+  cex.main = 1.4,
+  cex.lab = 1.3,
+  cex.axis = 1.3,
+  xlab = "lag",
+  ylab = "PACF",
+  main = ""
+)
 ```
 
 
 ```{r}
-quantile_list = c(0.25, 0.5, 0.75, 0.9, 0.92, 0.95)
-bic = calculate_bic(ts_train, max_lag = 30, quantile_list)
-lag_optimal = apply(bic, 2, which.min)
+quantile_list <- c(0.9, 0.92, 0.95)
+bic <- calculate_bic(ts_train, max_lag = 30, 0.5)
+lag_optimal <- apply(bic, 2, which.min)
+qplot(seq_along(bic), bic) + geom_line(size = 1.5) +
+  geom_point() +
+  annotate(
+    "point",
+    x = lag_optimal,
+    y = bic[lag_optimal],
+    colour = "red",
+    size = 5
+  ) +
+  labs(
+    title = "log breach sizes",
+    x = "lag",
+    y = "BIC",
+    color = ""
+  ) +
+  theme(
+    axis.text.x = element_text(size = 14),
+    axis.title.x = element_text(size = 15),
+    axis.text.y = element_text(size = 14),
+    axis.title.y = element_text(size = 15),
+    plot.title = element_text(
+      size = 20,
+      face = "bold",
+      color = "black",
+      hjust = 0.5
+    )
+  )
 ```
 
+
 ```{r}
-par(mfrow=c(3, 2))
-for (i in c(1, 4, 2, 5, 3, 6)) {
-  plot(bic[, i], type = "l", lwd = 1.4, cex.main = 1.4, cex.lab = 1.3, cex.axis = 1.3, xlab = "lag", ylab = "BIC", main = paste("quantile", quantile_list[i], sep = " = "))
-  lines(which.min(bic[, i]), bic[which.min(bic[, i]), i], type = "p", lwd = 2, col = "red")
+qar_test <- matrix(NaN, n_test, length(quantile_list))
+vartest_matrix <- data.frame(matrix(0, length(quantile_list), 7))
+names(vartest_matrix) <- c(
+  "quantile",
+  "expected.exceed",
+  "actual.exceed",
+  "uc.LRp",
+  "cc.LRp",
+  "uc.Decision",
+  "cc.Decision"
+)
+for (i in seq_along(quantile_list)) {
+  quantile <- quantile_list[i]
+  qar_test[(lag_optimal + 1):n_test, i] <-
+    qar(ts_train, ts_test, lag_optimal, quantile)
+  vartest_matrix[i, ] <-
+    backtesting(1 - quantile, -ts_test[(lag_optimal + 1):n_test], -qar_test[(lag_optimal + 1):n_test, i])
 }
-```
-```{r}
-qar_test = matrix(NaN, n_test, length(quantile_list))
-VaRtest_matrix = data.frame(matrix(0, length(quantile_list), 7))
-names(VaRtest_matrix) = c("quantile", "expected.exceed", "actual.exceed", "uc.LRp", "cc.LRp", "uc.Decision", "cc.Decision")
-for (i in 1:length(quantile_list)) {
-  lag = lag_optimal[i]
-  quantile = quantile_list[i]
-  qar_test[(lag + 1):n_test, i] = qar(ts_train, ts_test, lag, quantile)
-  VaRtest_matrix[i, ] = backtesting(quantile, ts_test[(lag + 1):n_test], qar_test[(lag + 1):n_test, i])
-}
+vartest_matrix["quantile"] <- quantile_list
+print(vartest_matrix)
 ```
 
 ```{r}
-print(VaRtest_matrix[4:6, ])
-```
-
-```{r}
-range = seq((max(lag_optimal[1:3]) + 1), n_test)
-par(mfrow = c(1, 1))
-plot(ts_test[range], type = "l", col = "black", xlab = "time", ylab = "log breach sizes", main = "QAR", lwd = 1.4, cex.main = 1.4, cex.lab = 1.3, cex.axis = 1.3)
-lines(qar_test[range, 1], col = "blue",  lwd = 1.4, cex.main = 1.4, cex.lab = 1.3, cex.axis = 1.3)
-lines(qar_test[range, 2], col = "green",  lwd = 1.4, cex.main = 1.4, cex.lab = 1.3, cex.axis = 1.3)
-lines(qar_test[range, 3], col = "red",  lwd = 1.4, cex.main = 1.4, cex.lab = 1.3, cex.axis = 1.3)
-legend("bottomleft", legend = c("actual", "0.25", "0.5", "0.75"), col=c("black", "blue", "green", "red"), lty=1, cex=0.55,  lwd = 1.4)
-```
-
-```{r}
-range = seq((max(lag_optimal[4:6]) + 1), n_test)
-par(mfrow = c(1, 1))
-plot(ts_test[range], type = "l", col = "black", xlab = "time", ylab = "log breach sizes", main = "QAR", lwd = 1.4, cex.main = 1.4, cex.lab = 1.3, cex.axis = 1.3)
-lines(qar_test[range, 4], col = "blue",  lwd = 1.4, cex.main = 1.4, cex.lab = 1.3, cex.axis = 1.3)
-lines(qar_test[range, 5], col = "green",  lwd = 1.4, cex.main = 1.4, cex.lab = 1.3, cex.axis = 1.3)
-lines(qar_test[range, 6], col = "red",  lwd = 1.4, cex.main = 1.4, cex.lab = 1.3, cex.axis = 1.3)
-legend("bottomleft", legend = c("actual", "0.90", "0.92", "0.95"), col=c("black", "blue", "green", "red"), lty=1, cex=0.55,  lwd = 1.4)
+range <- seq((lag_optimal + 1), n_test)
+qar_preds <- data.frame(ts_test[range], qar_test[range, ])
+colnames(qar_preds) <- c("actual", "quantile = 0.9", "quantile = 0.92", "quantile = 0.95")
+qar_preds$time <- seq(1, nrow(qar_preds))
+qar_long <-
+  melt(qar_preds, id = "time")
+ggplot(data = qar_long, aes(x = time, y = value, colour = variable)) +
+  geom_line(size = 0.5) +
+  scale_color_manual(
+    labels = c(
+      "actual",
+      expression(paste(alpha, " = ", "0.90")),
+      expression(paste(alpha, " = ", 0.92)),
+      expression(paste(alpha, " = ", 0.95))
+    ),
+    values = c("black", "blue", "green", "red")
+  ) +
+  labs(
+    title = "QAR",
+    x = "time",
+    y = "log breach sizes",
+    color = ""
+  ) +
+  theme(
+    axis.text.x = element_text(size = 14),
+    axis.title.x = element_text(size = 15),
+    axis.text.y = element_text(size = 14),
+    axis.title.y = element_text(size = 15),
+    plot.title = element_text(
+      size = 20,
+      face = "bold",
+      color = "black",
+      hjust = 0.5
+    ),
+    legend.text = element_text(color = "black", size = 15)
+  )
 ```
 
