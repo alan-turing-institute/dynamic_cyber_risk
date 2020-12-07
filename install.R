@@ -4,6 +4,7 @@ install.packages(c(
   "quantreg",
   "ramify",
   "reshape2",
+  "rmarkdown",
   "rugarch",
   "tsutils"
 ))
