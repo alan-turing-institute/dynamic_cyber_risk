@@ -1,7 +1,6 @@
 #' Supporting functions for the main algorithms
 
 library(tsutils)
-library(ramify)
 
 pinball_loss <- function(target, predictions, quantile) {
   #' The pinball loss between the targets and predictions

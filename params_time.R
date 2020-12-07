@@ -16,7 +16,7 @@ for (i in seq_along(vector_a)) {
   for (j in seq_along(vector_sigma)) {
     reg_param <- vector_a[i]
     sigma_param <- vector_sigma[j]
-    pred_train <- waaqar(
+    pred_train <- cqar(
       ts_train,
       lag = 5,
       quantile = 0.95,
@@ -30,3 +30,6 @@ for (i in seq_along(vector_a)) {
     losses_train[i, j] <- sum(pinball_loss(ts_train[6:n_train], pred_train$target_hat, quantile = 0.95))
   }
 }
+
+print(round(accept_train, 2))
+print(round(losses_train, 2))

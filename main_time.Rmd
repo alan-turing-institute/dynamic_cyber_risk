@@ -6,6 +6,7 @@ output: html_notebook
 The notebook reproduces the predictions of QAR and CQAR
 
 ```{r}
+library("dplyr")
 library("ggplot2")
 library("reshape2")
 
@@ -38,6 +39,33 @@ ggplot(df, aes(x = seq_along(time), y = time)) +
       hjust = 0.5
     )
   )
+```
+```{r}
+org_group <- df %>%
+  group_by(Type.of.organization) %>%
+  summarise(
+    min = min(time),
+    median = median(time),
+    mean = mean(time),
+    sd = sd(time),
+    max = max(time),
+    total = n()
+  )
+org_total <- cbind(
+  "Total",
+  df %>%
+    summarise(
+      min = min(time),
+      median = median(time),
+      mean = mean(time),
+      sd = sd(time),
+      max = max(time),
+      total = n()
+    )
+) %>%
+  rename(Type.of.organization = "\"Total\"")
+org_summary <- rbind(org_group, org_total)
+print(org_summary)
 ```
 
 ```{r}
@@ -162,7 +190,7 @@ qar_preds <- data.frame(ts_test[range], qar_test[range, ])
 colnames(qar_preds) <- c("actual", "quantile = 0.9", "quantile = 0.92", "quantile = 0.95")
 qar_preds$time <- seq(1, nrow(qar_preds))
 qar_long <-
-  melt(qar_preds, id = "time") 
+  melt(qar_preds, id = "time")
 ggplot(data = qar_long, aes(x = time, y = value, colour = variable)) +
   geom_line(size = 0.5) +
   scale_color_manual(

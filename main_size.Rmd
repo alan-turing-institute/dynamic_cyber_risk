@@ -6,6 +6,7 @@ output: html_notebook
 The notebook reproduces the predictions of QAR
 
 ```{r}
+library("dplyr")
 library("ggplot2")
 library("reshape2")
 
@@ -38,6 +39,33 @@ ggplot(df, aes(x = seq_along(log_size), y = log_size)) +
       hjust = 0.5
     )
   )
+```
+```{r}
+org_group <- df %>%
+  group_by(Type.of.organization) %>%
+  summarise(
+    min = min(total_records),
+    median = median(total_records),
+    mean = mean(total_records),
+    sd = sd(total_records),
+    max = max(total_records),
+    total = n()
+  )
+org_total <- cbind(
+  "Total",
+  df %>%
+    summarise(
+      min = min(total_records),
+      median = median(total_records),
+      mean = mean(total_records),
+      sd = sd(total_records),
+      max = max(total_records),
+      total = n()
+    )
+) %>%
+  rename(Type.of.organization = "\"Total\"")
+org_summary <- rbind(org_group, org_total)
+print(org_summary)
 ```
 
 
