@@ -1,8 +1,8 @@
-# Dynamic Cyber Risk Estimation with Competitive Quantile Autoregression
+# Dynamic cyber risk estimation with Competitive Quantile Autoregression
 
 The repository reproduces the results of the so-called paper. The visualisation of the predictions of the cyber breaches' sizes is available [here](https://nbviewer.jupyter.org/github/RaisaDZ/dynamic_cyber_risk/blob/main/main_size.nb.html), and of the predictions of cyber breaches' inter-arrival times is available [here](https://nbviewer.jupyter.org/github/RaisaDZ/dynamic_cyber_risk/blob/main/main_time.nb.html). You can also reproduce the results using [Binder](https://mybinder.org). Click on [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/RaisaDZ/dynamic_cyber_risk/HEAD?urlpath=rstudio). You will see the RStudio window. In the RStudio, you can run `main_size.Rmd` to reproduce the results for the breaches' sizes and `main_time.Rmd` to reproduce the results for the breaches' inter-arrival times. 
 
-`main_functions.R` contains the codes for Competitive Quantile Autoregression (CQAR);
+`main_functions.R` contains the code for Competitive Quantile Autoregression (CQAR);
 
 `params_time.R` finds the parameters of CQAR on the training dataset;
 
