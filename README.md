@@ -10,7 +10,7 @@ The visualisation of the predictions of the cyber breaches' sizes is available [
 
 ## Installation
 
-To run the project locally you need to download [R](https://www.r-project.org) and [RStudio](https://rstudio.com).
+The easiest way to run the project is to use Binder (see above). If you want to run the project locally you need to download [R](https://www.r-project.org) and [RStudio](https://rstudio.com).
 Clone the repository:
 ```bash
 git clone https://github.com/RaisaDZ/dynamic_cyber_risk.git dynamic_cyber_risk
