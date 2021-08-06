@@ -1,0 +1,368 @@
+---
+title: "PHYS breach sizes "
+output: html_notebook
+---
+
+The notebook reproduces the predictions of CQAR and ARMA-GARCH for PHYS breaches
+
+```{r}
+library("dplyr")
+library("ggplot2")
+library("reshape2")
+
+source("../dynamic_risk/additional_functions.R", chdir=T)
+source("../dynamic_risk/main_functions.R", chdir=T)
+```
+
+```{r}
+df <- read.csv("../data/PRC Data Breach Chronology - 1.13.20.csv", header = T)
+df <- df[df$Type.of.breach == "PHYS", ]
+df$total_records <- as.numeric(gsub(",", "", df$Total.Records, "[,]"))
+df <- df[complete.cases(df$total_records) & (df$total_records > 0), ]
+df$date <- as.Date(df$Date.Made.Public, "%m/%d/%Y")
+df <- df[order(df$date), ]
+df$date_next <- c(df$date[2:dim(df)[1]], NA)
+df$time <- as.numeric(df$date_next - df$date)
+set.seed(1)
+for (i in 1:dim(df)[1]) {
+  df$time[i] <- ifelse(df$time[i] == 0, runif(1, 0, 1), df$time[i])
+}
+df <- df[order(df$date, df$time), ]
+df <- head(df, -1)
+df$log_time <- log(df$time)
+df$log_size <- log(df$total_records)
+n_train <- floor(dim(df)[1] * 0.6)
+n_test <- dim(df)[1] - n_train
+n_test1 <- floor(n_test * 0.25)
+n_test2 <- n_test - n_test1
+df$flag_train <- 0
+df$flag_train[1:n_train] <- 1
+```
+
+```{r}
+ts_total <- df$log_size
+ts_train <- ts_total[1:n_train]
+ts_test <- ts_total[(n_train + 1):length(ts_total)]
+ts_test1 <- ts_total[(n_train + 1):(n_train+n_test1)]
+ts_test2 <- ts_total[(n_train+n_test1+1):length(ts_total)]
+acf <- acf(ts_total, plot = FALSE)
+pacf <- pacf(ts_total, plot = FALSE)
+```
+
+```{r}
+ggplot(df, aes(x = seq_along(log_size), y = log_size)) +
+  geom_line() +
+  labs(title = "log breach sizes", x = "time", y = "") +
+  theme(
+    axis.text.x = element_text(size = 14),
+    axis.title.x = element_text(size = 15),
+    axis.text.y = element_text(size = 14),
+    axis.title.y = element_text(size = 15),
+    plot.title = element_text(
+      size = 20,
+      face = "bold",
+      color = "black",
+      hjust = 0.5
+    )
+  )
+```
+```{r}
+org_group <- df %>%
+  group_by(Type.of.organization) %>%
+  summarise(
+    min = min(total_records),
+    median = median(total_records),
+    mean = mean(total_records),
+    sd = sd(total_records),
+    max = max(total_records),
+    total = n()
+  )
+org_total <- cbind(
+  "Total",
+  df %>%
+    summarise(
+      min = min(total_records),
+      median = median(total_records),
+      mean = mean(total_records),
+      sd = sd(total_records),
+      max = max(total_records),
+      total = n()
+    )
+) %>%
+  rename(Type.of.organization = "\"Total\"")
+org_summary <- rbind(org_group, org_total)
+print(org_summary)
+```
+
+```{r}
+plot(
+  acf,
+  lwd = 1.4,
+  cex.main = 1.4,
+  cex.lab = 1.3,
+  cex.axis = 1.3,
+  xlab = "lag",
+  ylab = "ACF",
+  main = ""
+)
+```
+
+
+```{r}
+plot(
+  pacf,
+  lwd = 1.4,
+  cex.main = 1.4,
+  cex.lab = 1.3,
+  cex.axis = 1.3,
+  xlab = "lag",
+  ylab = "PACF",
+  main = ""
+)
+```
+
+```{r}
+quantile_list <- c(0.9, 0.92, 0.95)
+bic <- calculate_bic(ts_train, max_lag = 30, 0.5)
+lag_optimal <- apply(bic, 2, which.min)
+qplot(seq_along(bic), bic) + geom_line(size = 1.5) +
+  geom_point() +
+  annotate(
+    "point",
+    x = lag_optimal,
+    y = bic[lag_optimal],
+    colour = "red",
+    size = 5
+  ) +
+  labs(
+    title = "log breach sizes",
+    x = "lag",
+    y = "BIC",
+    color = ""
+  ) +
+  theme(
+    axis.text.x = element_text(size = 14),
+    axis.title.x = element_text(size = 15),
+    axis.text.y = element_text(size = 14),
+    axis.title.y = element_text(size = 15),
+    plot.title = element_text(
+      size = 20,
+      face = "bold",
+      color = "black",
+      hjust = 0.5
+    )
+  )
+```
+
+
+```{r}
+vector_a <- c(0.1, 0.3, 0.5, 0.7, 1)
+vector_sigma <- c(0.1, 0.3, 0.5, 0.7, 1)
+accept_train <- matrix(0, length(vector_a), length(vector_sigma))
+losses_train <- matrix(0, length(vector_a), length(vector_sigma))
+for (i in seq_along(vector_a)) {
+  for (j in seq_along(vector_sigma)) {
+    reg_param <- vector_a[i]
+    sigma_param <- vector_sigma[j]
+    pred_train <- cqar(
+      ts_test1,
+      lag = lag_optimal,
+      quantile = 0.95,
+      iter_number = 2500,
+      burn_in_period = 500,
+      reg_param,
+      sigma_param,
+      seed = 1
+    )
+    accept_train[i, j] <- mean(pred_train$accept_rate)
+    losses_train[i, j] <- sum(pinball_loss(ts_test1[(lag_optimal+1):n_test1], pred_train$target_hat, quantile = 0.95))
+  }
+}
+print(round(accept_train, 2))
+print(round(losses_train, 2))
+```
+
+
+```{r}
+cqar_test <- matrix(NaN, n_test-lag_optimal, length(quantile_list))
+vartest_matrix <-
+  data.frame(matrix(0, length(quantile_list), 7))
+names(vartest_matrix) <- c(
+  "quantile",
+  "expected.exceed",
+  "actual.exceed",
+  "uc.LRp",
+  "cc.LRp",
+  "uc.Decision",
+  "cc.Decision"
+)
+for (i in seq_along(quantile_list)) {
+  quantile <- quantile_list[i]
+  cqar1 <- cqar(
+    ts_test1,
+    lag_optimal,
+    quantile,
+    iter_number = 2500,
+    burn_in_period = 500,
+    reg_param = 1,
+    sigma_param = 1,
+    seed = 1
+  )
+  
+  cqar2 <- cqar(
+    c(ts_test1[(n_test1-lag_optimal+1):n_test1], ts_test2),
+    lag_optimal,
+    quantile,
+    iter_number = 2500,
+    burn_in_period = 500,
+    reg_param = 0.5,
+    sigma_param = 0.7,
+    seed = 1,
+    theta_param = cqar1$theta[dim(cqar1$theta)[1], dim(cqar1$theta)[2], ]
+ )
+  
+  cqar_test[, i] <- c(cqar1$target_hat, cqar2$target_hat)
+  vartest_matrix[i, ] <-
+    backtesting(1 - quantile, -ts_test[(lag_optimal + 1):n_test], -cqar_test[, i])
+}
+vartest_matrix["quantile"] <- quantile_list
+```
+
+```{r}
+vartest_matrix
+```
+
+```{r}
+range <- seq((lag_optimal + 1), n_test)
+cqar_preds <- data.frame(ts_test[range], cqar_test)
+colnames(cqar_preds) <- c("actual", "quantile = 0.9", "quantile = 0.92", "quantile = 0.95")
+cqar_preds$time <- seq(1, nrow(cqar_preds))
+cqar_long <-
+  melt(cqar_preds, id = "time")
+ggplot(data = cqar_long, aes(x = time, y = value, colour = variable)) +
+  geom_line(size = 0.5) +
+  scale_color_manual(
+    labels = c(
+      "actual",
+      expression(paste(alpha, " = ", "0.90")),
+      expression(paste(alpha, " = ", 0.92)),
+      expression(paste(alpha, " = ", 0.95))
+    ),
+    values = c("black", "blue", "green", "red")
+  ) +
+  labs(
+    title = "CQAR",
+    x = "time",
+    y = "log breach sizes",
+    color = ""
+  ) +
+  theme(
+    axis.text.x = element_text(size = 14),
+    axis.title.x = element_text(size = 15),
+    axis.text.y = element_text(size = 14),
+    axis.title.y = element_text(size = 15),
+    plot.title = element_text(
+      size = 20,
+      face = "bold",
+      color = "black",
+      hjust = 0.5
+    ),
+    legend.text = element_text(color = "black", size = 15)
+  )
+```
+
+```{r}
+arma_bic = matrix(0, 3, 3)
+for (i in 0:2) for (j in 0:2) {
+  arma_bic[i+1, j+1] <- BIC(arima(ts(ts_train), order=c(i, 0, j)))
+}
+round(arma_bic, 1)
+```
+
+
+
+```{r}
+model=ugarchspec(
+  variance.model = list(model = "sGARCH", garchOrder = c(1, 1)),
+  mean.model = list(armaOrder = c(1, 1))
+)
+
+
+modelroll=ugarchroll(
+  spec=model, data=ts_total, n.ahead = 1, forecast.length = length(ts_test),
+  n.start = NULL, refit.every = 50, refit.window = c("recursive"),
+  window.size = NULL, solver = "hybrid", fit.control = list(),
+  solver.control = list(), calculate.VaR = TRUE, 
+  VaR.alpha = c(0.90, 0.92, 0.95),
+  cluster = NULL, keep.coef = TRUE
+)
+```
+
+```{r}
+garch_preds <- data.frame(modelroll@forecast$VaR$realized, 
+                          modelroll@forecast$VaR$`alpha(90%)`,
+                          modelroll@forecast$VaR$`alpha(92%)`,
+                          modelroll@forecast$VaR$`alpha(95%)`)
+colnames(garch_preds) <- c("actual", "quantile = 0.9", "quantile = 0.92", "quantile = 0.95")
+garch_preds$time <- seq(1, nrow(garch_preds))
+garch_long <-
+  melt(garch_preds, id = "time")
+ggplot(data = garch_long, aes(x = time, y = value, colour = variable)) +
+  geom_line(size = 0.5) +
+  scale_color_manual(
+    labels = c(
+      "actual",
+      expression(paste(alpha, " = ", "0.90")),
+      expression(paste(alpha, " = ", 0.92)),
+      expression(paste(alpha, " = ", 0.95))
+    ),
+    values = c("black", "blue", "green", "red")
+  ) +
+  labs(
+    title = "ARMA(1,1)-GARCH(1,1)",
+    x = "time",
+    y = "log breach sizes",
+    color = ""
+  ) +
+  theme(
+    axis.text.x = element_text(size = 14),
+    axis.title.x = element_text(size = 15),
+    axis.text.y = element_text(size = 14),
+    axis.title.y = element_text(size = 15),
+    plot.title = element_text(
+      size = 20,
+      face = "bold",
+      color = "black",
+      hjust = 0.5
+    ),
+    legend.text = element_text(color = "black", size = 15)
+  )
+```
+```{r}
+vartest_garch <-
+  data.frame(matrix(0, length(quantile_list), 7))
+names(vartest_garch) <- c(
+  "quantile",
+  "expected.exceed",
+  "actual.exceed",
+  "uc.LRp",
+  "cc.LRp",
+  "uc.Decision",
+  "cc.Decision"
+)
+vartest_garch[1, ] <-
+    backtesting(1 - 0.9, -ts_test[(lag_optimal + 1):n_test], -modelroll@forecast$VaR$`alpha(90%)`[(lag_optimal + 1):n_test])
+
+vartest_garch[2, ] <-
+    backtesting(1 - 0.92, -ts_test[(lag_optimal + 1):n_test], -modelroll@forecast$VaR$`alpha(92%)`[(lag_optimal + 1):n_test])
+
+vartest_garch[3, ] <-
+    backtesting(1 - 0.95, -ts_test[(lag_optimal + 1):n_test], -modelroll@forecast$VaR$`alpha(95%)`[(lag_optimal + 1):n_test])
+
+vartest_garch["quantile"] <- quantile_list
+
+print(vartest_garch)
+```
+
+
+

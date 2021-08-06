@@ -1,19 +1,42 @@
 ---
-title: "Breach inter-arrival times"
+title: "HACK breach inter-arrival times"
 output: html_notebook
 ---
 
-The notebook reproduces the predictions of QAR and CQAR
+The notebook reproduces the predictions of QAR and CQAR for HACH breaches
 
 ```{r}
 library("dplyr")
 library("ggplot2")
 library("reshape2")
 
-source("additional_functions.R")
-source("main_functions.R")
+source("../dynamic_risk/additional_functions.R", chdir=T)
+source("../dynamic_risk/main_functions.R", chdir=T)
+```
 
-df <- read.csv("hacking_breaches.csv", header = T)
+```{r}
+df <- read.csv("../data/PRC Data Breach Chronology - 1.13.20.csv", header = T)
+df <- df[df$Type.of.breach == "HACK", ]
+df$total_records <- as.numeric(gsub(",", "", df$Total.Records, "[,]"))
+df <- df[complete.cases(df$total_records) & (df$total_records > 0), ]
+df$date <- as.Date(df$Date.Made.Public, "%m/%d/%Y")
+df <- df[order(df$date), ]
+df$date_next <- c(df$date[2:dim(df)[1]], NA)
+df$time <- as.numeric(df$date_next - df$date)
+set.seed(1)
+for (i in 1:dim(df)[1]) {
+  df$time[i] <- ifelse(df$time[i] == 0, runif(1, 0, 1), df$time[i])
+}
+df <- df[order(df$date, df$time), ]
+df <- head(df, -1)
+df$log_time <- log(df$time)
+df$log_size <- log(df$total_records)
+n_train <- floor(dim(df)[1] * 0.6)
+df$flag_train <- 0
+df$flag_train[1:n_train] <- 1
+```
+
+```{r}
 ts_total <- df$log_time
 n_train <- sum(df$flag_train)
 n_test <- length(ts_total) - n_train
@@ -40,6 +63,7 @@ ggplot(df, aes(x = seq_along(time), y = time)) +
     )
   )
 ```
+
 ```{r}
 org_group <- df %>%
   group_by(Type.of.organization) %>%
@@ -126,6 +150,36 @@ qplot(seq_along(bic), bic) + geom_line(size = 1.5) +
       hjust = 0.5
     )
   )
+```
+
+```{r}
+# vector_a <- c(0.1, 0.5, 1)
+# vector_sigma <- c(0.5, 0.7, 1)
+# accept_train <- matrix(0, length(vector_a), length(vector_sigma))
+# losses_train <- matrix(0, length(vector_a), length(vector_sigma))
+# for (i in seq_along(vector_a)) {
+#   for (j in seq_along(vector_sigma)) {
+#     reg_param <- vector_a[i]
+#     sigma_param <- vector_sigma[j]
+#     pred_train <- cqar(
+#       ts_train,
+#       lag = lag_optimal,
+#       quantile = 0.95,
+#       iter_number = 2500,
+#       burn_in_period = 500,
+#       reg_param,
+#       sigma_param,
+#       seed = 1
+#     )
+#     accept_train[i, j] <- mean(pred_train$accept_rate)
+#     losses_train[i, j] <- sum(pinball_loss(ts_train[(lag_optimal+1):n_train],    pred_train$target_hat, quantile = 0.95))
+#   }
+# }
+```
+
+```{r}
+# print(round(accept_train, 2))
+# print(round(losses_train, 2))
 ```
 
 

@@ -12,7 +12,8 @@ waaqr <-
            burn_in_period,
            reg_param,
            sigma_param,
-           seed = NULL) {
+           seed = NULL,
+           theta_param = NULL) {
     #' Weak Aggregating Algorithm for Quantile Regression
     #'
     #' @description
@@ -31,7 +32,9 @@ waaqr <-
     #' @param burn_in_period The burn-in period of MCMC, numeric
     #' @param reg_param The regulazation parameter, numeric.
     #' @param sigma_param The standard deviation parameter, numeric.
-    #' @seed The random seed, numeric.
+    #' @param seed The random seed, numeric.
+    #' @param theta_param The initial parameters of quantile regression 
+    #'     (if NULL sampling starts from zero).
     #'
     #' @return target_hat The predictions of outcomes, dim [number_of_steps, 1].
     #' @return theta The MCMC sampling parameters at each iteration,
@@ -46,6 +49,9 @@ waaqr <-
     lag_number <- dim(lag_matrix)[2]
     target_hat <- matrix(0, time, ncol = 1)
     theta <- array(0, dim = c(time, iter_number, lag_number))
+    if (!is.null(theta_param)) {
+      theta[1, 1, ] <- theta_param
+    }
     accept_matrix <-
       array(0, dim = c(time, iter_number, lag_number))
     for (t in 1:time) {
@@ -103,7 +109,8 @@ cqar <- function(ts,
                  burn_in_period,
                  reg_param,
                  sigma_param,
-                 seed = NULL) {
+                 seed = NULL,
+                 theta_param = NULL) {
   #' Competitive Quantile Autoregression
   #'
   #' @description
@@ -122,7 +129,9 @@ cqar <- function(ts,
   #' @param burn_in_period The burn-in period of MCMC, numeric
   #' @param reg_param The regulazation parameter, numeric.
   #' @param sigma_param The standard deviation parameter, numeric.
-  #' @seed The random seed, numeric.
+  #' @param seed The random seed, numeric.
+  #' @param theta_param The initial parameters of quantile autoregression 
+  #'  (if NULL sampling starts from zero).
   #'
   #' @return target_hat The predictions of outcomes,
   #'   the length of the predictions is length(ts)-lag.
@@ -143,7 +152,8 @@ cqar <- function(ts,
     burn_in_period,
     reg_param,
     sigma_param,
-    seed
+    seed,
+    theta_param
   )
   return(
     list(
