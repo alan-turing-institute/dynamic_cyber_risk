@@ -307,9 +307,9 @@ colnames(garch_preds) <- c("actual", "quantile = 0.9", "quantile = 0.92", "quant
 garch_preds$time <- seq(1, nrow(garch_preds))
 garch_long <-
   melt(garch_preds, id = "time")
-ggplot(data = garch_long, aes(x = time, y = value, colour = variable)) +
-  geom_line(size = 0.5) +
-  scale_color_manual(
+ggplot(data = garch_long, aes(x = time, y = value, colour = variable, linetype = variable)) +
+  geom_line(size = 0.8) +
+  scale_color_manual(name = "",
     labels = c(
       "actual",
       expression(paste(alpha, " = ", "0.90")),
@@ -317,6 +317,15 @@ ggplot(data = garch_long, aes(x = time, y = value, colour = variable)) +
       expression(paste(alpha, " = ", 0.95))
     ),
     values = c("black", "blue", "green", "red")
+  ) +
+  scale_linetype_manual(name = "",
+    labels = c(
+      "actual",
+      expression(paste(alpha, " = ", "0.90")),
+      expression(paste(alpha, " = ", 0.92)),
+      expression(paste(alpha, " = ", 0.95))
+    ),
+    values=c("solid", "twodash", "dotdash", "dotted")
   ) +
   labs(
     title = "ARMA(1,1)-GARCH(1,1)",

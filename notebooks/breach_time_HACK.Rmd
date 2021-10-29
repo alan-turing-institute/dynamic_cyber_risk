@@ -245,22 +245,27 @@ colnames(qar_preds) <- c("actual", "quantile = 0.9", "quantile = 0.92", "quantil
 qar_preds$time <- seq(1, nrow(qar_preds))
 qar_long <-
   melt(qar_preds, id = "time")
-ggplot(data = qar_long, aes(x = time, y = value, colour = variable)) +
-  geom_line(size = 0.5) +
-  scale_color_manual(
+ggplot(data = qar_long, aes(x = time, y = value, colour = variable, linetype = variable)) +
+  geom_line(size = 0.8) +
+  scale_color_manual(name="",
     labels = c(
       "actual",
       expression(paste(alpha, " = ", "0.90")),
       expression(paste(alpha, " = ", 0.92)),
       expression(paste(alpha, " = ", 0.95))
     ),
-    values = c("black", "blue", "green", "red")
-  ) +
+    values = c("black", "blue", "green", "red")) +
+  scale_linetype_manual(name="", labels = c(
+      "actual",
+      expression(paste(alpha, " = ", "0.90")),
+      expression(paste(alpha, " = ", 0.92)),
+      expression(paste(alpha, " = ", 0.95))
+    ),
+    values=c("solid", "twodash", "dotdash", "dotted"))   +
   labs(
     title = "QAR",
     x = "time",
-    y = "log inter-arrival times",
-    color = ""
+    y = "log inter-arrival times"
   ) +
   theme(
     axis.text.x = element_text(size = 14),
@@ -269,12 +274,10 @@ ggplot(data = qar_long, aes(x = time, y = value, colour = variable)) +
     axis.title.y = element_text(size = 15),
     plot.title = element_text(
       size = 20,
-      face = "bold",
-      color = "black",
       hjust = 0.5
     ),
     legend.text = element_text(color = "black", size = 15)
-  )
+  ) 
 ```
 
 
@@ -285,22 +288,27 @@ colnames(cqar_preds) <- c("actual", "quantile = 0.9", "quantile = 0.92", "quanti
 cqar_preds$time <- seq(1, nrow(cqar_preds))
 cqar_long <-
   melt(cqar_preds, id = "time")
-ggplot(data = cqar_long, aes(x = time, y = value, colour = variable)) +
-  geom_line(size = 0.5) +
-  scale_color_manual(
+ggplot(data = cqar_long, aes(x = time, y = value, colour = variable, linetype = variable)) +
+  geom_line(size = 0.8) +
+  scale_color_manual(name="",
     labels = c(
       "actual",
       expression(paste(alpha, " = ", "0.90")),
       expression(paste(alpha, " = ", 0.92)),
       expression(paste(alpha, " = ", 0.95))
     ),
-    values = c("black", "blue", "green", "red")
-  ) +
+    values = c("black", "blue", "green", "red")) +
+  scale_linetype_manual(name="", labels = c(
+      "actual",
+      expression(paste(alpha, " = ", "0.90")),
+      expression(paste(alpha, " = ", 0.92)),
+      expression(paste(alpha, " = ", 0.95))
+    ),
+    values=c("solid", "twodash", "dotdash", "dotted"))   +
   labs(
     title = "CQAR",
     x = "time",
-    y = "log inter-arrival times",
-    color = ""
+    y = "log inter-arrival times"
   ) +
   theme(
     axis.text.x = element_text(size = 14),
@@ -309,12 +317,10 @@ ggplot(data = cqar_long, aes(x = time, y = value, colour = variable)) +
     axis.title.y = element_text(size = 15),
     plot.title = element_text(
       size = 20,
-      face = "bold",
-      color = "black",
       hjust = 0.5
     ),
     legend.text = element_text(color = "black", size = 15)
-  )
+  ) 
 ```
 
 ```{r}
@@ -322,9 +328,9 @@ regret_average <- data.frame(regret_average)
 regret_average$time <- seq(1, nrow(regret_average))
 regret_long <-
   melt(regret_average, id = "time")
-ggplot(data = regret_long, aes(x = time, y = value, colour = variable)) +
+ggplot(data = regret_long, aes(x = time, y = value, colour = variable, linetype = variable)) +
   geom_line(size = 1) +
-  scale_color_manual(
+  scale_color_manual(name="",
     labels = c(
       expression(paste(alpha, " = ", "0.90")),
       expression(paste(alpha, " = ", 0.92)),
@@ -332,11 +338,17 @@ ggplot(data = regret_long, aes(x = time, y = value, colour = variable)) +
     ),
     values = c("blue", "green", "red")
   ) +
+  scale_linetype_manual(name="",
+      labels = c(
+      expression(paste(alpha, " = ", "0.90")),
+      expression(paste(alpha, " = ", 0.92)),
+      expression(paste(alpha, " = ", 0.95))
+    ),
+    values=c("twodash", "dotdash", "dotted")) +
   labs(
     title = "",
     x = "time",
-    y = "average regret",
-    color = ""
+    y = "average regret"
   ) +
   theme(
     axis.text.x = element_text(size = 14),
@@ -350,5 +362,7 @@ ggplot(data = regret_long, aes(x = time, y = value, colour = variable)) +
       hjust = 0.5
     ),
     legend.text = element_text(color = "black", size = 15)
-  )
+  ) 
 ```
+
+
